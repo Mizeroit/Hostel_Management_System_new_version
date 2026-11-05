@@ -1,0 +1,73 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: hostel_management
+      MYSQL_USER: hostel_app
+      MYSQL_PASSWORD: ${DB_PASSWORD:-local-development-db-password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-local-development-root-password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    networks:
+      - hostel-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  backend:
+    image: ${DOCKERHUB_USERNAME:-local}/hostel-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: hostel_management
+      DB_USER: hostel_app
+      DB_PASSWORD: ${DB_PASSWORD:-local-development-db-password}
+      JWT_SECRET: ${JWT_SECRET:-local-development-jwt-secret-change-before-deploy}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@hostel.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeThisAdminPassword123!}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-5000}:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - hostel-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    image: ${DOCKERHUB_USERNAME:-local}/hostel-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - hostel-network
+
+networks:
+  hostel-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
