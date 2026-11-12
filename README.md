@@ -37,6 +37,7 @@ Hostel_Management_System/
 │   ├── middleware/
 │   ├── routes/
 │   ├── utils/
+│   ├── package-lock.json
 │   ├── Dockerfile
 │   ├── package.json
 │   └── server.js
@@ -45,10 +46,16 @@ Hostel_Management_System/
 │   ├── src/
 │   ├── Dockerfile
 │   ├── nginx.conf
+│   ├── package-lock.json
 │   ├── package.json
 │   └── vite.config.js
 ├── .env.example
+├── .gitignore
+├── .gitmodules
 ├── docker-compose.yml
+├── Jenkinsfile
+├── k8s/
+├── DEVOPS-README.md
 └── README.md
 ```
 
@@ -65,6 +72,8 @@ The MySQL database is named `hostel_management`. `database/init.sql` creates:
 Foreign keys preserve relationships. Student deletion cascades to their allocations and payments; a room with allocation history cannot be deleted. The API prevents active duplicate allocations and uses database transactions/row locks to enforce room capacity. Compose mounts the SQL file into the MySQL initialization directory; the image runs it automatically when the database volume is first created. MySQL initialization scripts do not rerun on an already initialized volume.
 
 The backend creates the configured administrator on first startup if the email does not exist. It hashes the password using bcrypt; changing `ADMIN_PASSWORD` later does not automatically reset an existing admin password.
+
+See [DEVOPS-README.md](./DEVOPS-README.md) for Jenkins CI/CD and Minikube/Kubernetes setup, deployment, verification, and troubleshooting.
 
 ## Configuration
 
