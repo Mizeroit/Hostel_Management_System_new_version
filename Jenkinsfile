@@ -24,7 +24,7 @@ pipeline {
     stage('Checkout') {
       steps {
         checkout scm
-        sh 'git submodule sync --recursive && git submodule update --init --recursive && test -f backend/package.json'
+        sh 'test -f backend/package.json'
         script {
           if (!params.DOCKERHUB_NAMESPACE?.trim() || params.DOCKERHUB_NAMESPACE == 'your-dockerhub-username') {
             error('Set DOCKERHUB_NAMESPACE to your Docker Hub account or organization.')

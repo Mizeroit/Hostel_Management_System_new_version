@@ -9,7 +9,7 @@ This guide adds CI/CD and Minikube deployment to the existing React/Vite, Expres
 - `database/init.sql` creates the tables and demo data. Kubernetes mounts it into MySQL's initialization directory on the first database start.
 - The Compose image names are `<DOCKERHUB_USERNAME>/hostel-frontend` and `<DOCKERHUB_USERNAME>/hostel-backend`. Replace the username placeholder with the Docker Hub account or organization that owns those repositories.
 - Both packages have `package-lock.json` files, which the existing Dockerfiles use with `npm ci` for reproducible installs.
-- The root repository tracks `backend/` as a Git submodule. `.gitmodules` now maps it to the existing GitHub repository, and the Jenkins Checkout stage initializes it before building. If you change backend files, commit and push that submodule revision to a remotely fetchable commit, then update the root repository's `backend` gitlink; Jenkins can only build the revision recorded by the root commit.
+- The root repository tracks `backend/` as a regular directory, so Jenkins checks it out with the rest of the source and does not need a separate submodule repository or commit.
 
 ## A. Jenkins
 

@@ -51,7 +51,6 @@ Hostel_Management_System/
 │   └── vite.config.js
 ├── .env.example
 ├── .gitignore
-├── .gitmodules
 ├── docker-compose.yml
 ├── Jenkinsfile
 ├── k8s/
