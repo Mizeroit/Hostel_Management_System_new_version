@@ -8,10 +8,10 @@ pipeline {
 
   parameters {
     string(
-      name: 'DOCKERHUB_NAMESPACE',
-      defaultValue: '',
-      description: 'Docker Hub account or organization that owns hostel-frontend and hostel-backend'
-    )
+    name: 'DOCKERHUB_NAMESPACE',
+    defaultValue: 'mizeroit',
+    description: 'Docker Hub account or organization that owns hostel-frontend and hostel-backend'
+)
   }
 
   environment {
