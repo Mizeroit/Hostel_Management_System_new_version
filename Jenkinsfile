@@ -9,7 +9,7 @@ pipeline {
   parameters {
     string(
       name: 'DOCKERHUB_NAMESPACE',
-      defaultValue: 'your-dockerhub-username',
+      defaultValue: '',
       description: 'Docker Hub account or organization that owns hostel-frontend and hostel-backend'
     )
   }
@@ -24,14 +24,33 @@ pipeline {
     stage('Checkout') {
       steps {
         checkout scm
-        sh 'test -f backend/package.json'
+      }
+    }
+
+    stage('Validate Project Structure') {
+      steps {
+        sh '''
+          set -eu
+          for file in \
+            frontend/package.json frontend/package-lock.json frontend/Dockerfile \
+            backend/package.json backend/package-lock.json backend/Dockerfile \
+            database/init.sql k8s/kustomization.yaml
+          do
+            if [ ! -f "$file" ]; then
+              echo "ERROR: Required project file not found: $file" >&2
+              exit 1
+            fi
+          done
+        '''
         script {
-          if (!params.DOCKERHUB_NAMESPACE?.trim() || params.DOCKERHUB_NAMESPACE == 'your-dockerhub-username') {
-            error('Set DOCKERHUB_NAMESPACE to your Docker Hub account or organization.')
+          def namespace = params.DOCKERHUB_NAMESPACE?.trim()
+          if (!namespace || namespace.length() > 255 || !(namespace ==~ /[a-z0-9]+([._-][a-z0-9]+)*/)) {
+            error('Set DOCKERHUB_NAMESPACE to a valid lowercase Docker Hub account or organization name.')
           }
+          env.DOCKERHUB_NAMESPACE = namespace
           env.IMAGE_TAG = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-          env.FRONTEND_IMAGE = "docker.io/${params.DOCKERHUB_NAMESPACE.trim()}/hostel-frontend"
-          env.BACKEND_IMAGE = "docker.io/${params.DOCKERHUB_NAMESPACE.trim()}/hostel-backend"
+          env.FRONTEND_IMAGE = "docker.io/${env.DOCKERHUB_NAMESPACE}/hostel-frontend"
+          env.BACKEND_IMAGE = "docker.io/${env.DOCKERHUB_NAMESPACE}/hostel-backend"
           echo "Building source commit ${env.IMAGE_TAG}"
         }
       }
@@ -72,6 +91,8 @@ pipeline {
     stage('Build Docker Images') {
       steps {
         sh '''
+          #!/usr/bin/env bash
+          set -euo pipefail
           docker build --pull -t "$FRONTEND_IMAGE:$IMAGE_TAG" ./frontend
           docker build --pull -t "$BACKEND_IMAGE:$IMAGE_TAG" ./backend
         '''
@@ -86,11 +107,13 @@ pipeline {
           passwordVariable: 'DOCKERHUB_TOKEN'
         )]) {
           sh '''
+            #!/usr/bin/env bash
+            set -euo pipefail
             set +x
+            trap 'docker logout >/dev/null 2>&1 || true' EXIT
             printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USER" --password-stdin
             docker push "$FRONTEND_IMAGE:$IMAGE_TAG"
             docker push "$BACKEND_IMAGE:$IMAGE_TAG"
-            docker logout
           '''
         }
       }
@@ -106,6 +129,8 @@ pipeline {
           string(credentialsId: 'hostel-admin-password', variable: 'ADMIN_PASSWORD')
         ]) {
           sh '''
+            #!/usr/bin/env bash
+            set -euo pipefail
             set +x
             kubectl apply -f k8s/namespace.yaml
 
@@ -133,6 +158,29 @@ pipeline {
             kubectl rollout status deployment/backend --namespace "$K8S_NAMESPACE" --timeout=5m
             kubectl rollout status deployment/frontend --namespace "$K8S_NAMESPACE" --timeout=5m
             kubectl get pods --namespace "$K8S_NAMESPACE" --output=wide
+            kubectl exec deployment/backend --namespace "$K8S_NAMESPACE" -- node -e '
+              require("http").get("http://127.0.0.1:5000/api/health", response => {
+                let body = "";
+                response.on("data", chunk => body += chunk);
+                response.on("end", () => {
+                  try {
+                    const health = JSON.parse(body);
+                    if (response.statusCode !== 200 || health.status !== "ok" || health.database !== "connected") {
+                      console.error(`Unexpected API health response (${response.statusCode}): ${body}`);
+                      process.exitCode = 1;
+                      return;
+                    }
+                    console.log(`API health verified: ${body}`);
+                  } catch (error) {
+                    console.error(`Invalid API health response: ${body}`);
+                    process.exitCode = 1;
+                  }
+                });
+              }).on("error", error => {
+                console.error(`API health request failed: ${error.message}`);
+                process.exitCode = 1;
+              });
+            '
           '''
         }
       }
